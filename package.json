@@ -1,0 +1,31 @@
+{
+  "name": "analytics",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
+    "worker": "ts-node-dev --respawn --transpile-only src/worker.ts",
+    "build": "tsc",
+    "start": "node dist/app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/type-provider-typebox": "^5.2.0",
+    "amqplib": "^0.10.8",
+    "dotenv": "^17.2.0",
+    "fastify": "^5.4.0",
+    "logzio-nodejs": "^2.5.0",
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.7",
+    "@types/node": "^24.0.14",
+    "@types/pg": "^8.15.4",
+    "autocannon": "^8.0.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  },
+  "description": ""
+}
