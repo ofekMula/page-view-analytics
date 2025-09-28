@@ -19,7 +19,7 @@ The system uses a partitioned architecture where page views are distributed acro
 The workers are responsible for aggregating page view requests, ensuring that write-heavy operations are handled efficiently.
 To further reduce write conflicts and increase throughput, the service implements row-level sharding using a random shard key. It's minimizing contention and optimizing performance under high load.
 
-![System Architecture Details](SystemArchitecture.png)
+![System Architecture Details](docs/SystemArchitecture.png)
 
 
 ## Features
@@ -250,8 +250,3 @@ The management interface allows you to:
 - Check exchange bindings
 - Monitor resource usage
 - Access detailed metrics and statistics
-
-Here are some examples of what you'll see in the RabbitMQ Management Dashboard:
-
-![RabbitMQ Dashboard Overview](Rabbitmq1.png)
-![RabbitMQ Queue Details](Rabbitmq2.png)
