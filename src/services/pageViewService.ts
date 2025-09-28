@@ -1,9 +1,9 @@
 import { Channel } from "amqplib/callback_api";
-import { pool } from "../config/database";
-import { RabbitMQClient } from "../config/rabbitmq";
-import type { MultiPageView, SinglePageView } from "../types";
+import { pool } from "../infra/database";
+import { RabbitMQClient } from "../infra/rabbitmq";
+import type { MultiPageView, ReportResponse, SinglePageView } from "../types";
 import crypto from "crypto";
-import { logger } from "../utils/logger";
+import { logger } from "../shared/utils/logger";
 
 export class PageViewService {
   private channel: Channel;
@@ -22,9 +22,7 @@ export class PageViewService {
     return isNaN(date.getTime()) ? null : date;
   }
 
-  // Internal sharding: pick a random shard_key for each insert (e.g., 0-9)
   private getShardKey(): number {
-    // You can tune the number of shards per logical row here (e.g., 10)
     const NUM_SHARDS = process.env.NUM_SHARDS ? parseInt(process.env.NUM_SHARDS) : 10;
     return Math.floor(Math.random() * NUM_SHARDS);
   }
@@ -58,6 +56,10 @@ export class PageViewService {
       shard_key,
     };
 
+    logger.debug(
+      { queue: queueName, page, views, partition, shardKey: shard_key },
+      "published page view message"
+    );
     this.channel.sendToQueue(queueName, Buffer.from(JSON.stringify(message)), {
       persistent: true,
     });
@@ -75,16 +77,6 @@ export class PageViewService {
     if (!validatedDate) {
       throw new Error(`Invalid timestamp format: ${timestamp}`);
     }
-
-    /*
-    logger.log({
-      level: 'info',
-      message: 'Incrementing single page view',
-      event: 'single_page_view_incremented',
-      page,
-      timestamp: validatedDate.toISOString()
-    });
-    */
 
     await this.publishToQueue(page, timestamp, 1);
   }
@@ -105,15 +97,6 @@ export class PageViewService {
       }
     }
 
-    /*
-    logger.log({
-      level: 'info',
-      message: 'Incrementing multiple page views',
-      event: 'multiple_page_views_incremented',
-      data,
-      timestamp: new Date().toISOString()
-    });
-    */
 
     await Promise.all(promises);
   }
@@ -123,7 +106,7 @@ export class PageViewService {
     now?: string,
     order: "asc" | "desc" = "asc",
     take?: number,
-  ): Promise<Array<{ h: number; v: number }>> {
+  ): Promise<ReportResponse> {
     const currentTime = now ? new Date(now) : new Date();
     const endTime = new Date(currentTime);
     endTime.setUTCMinutes(0, 0, 0);
@@ -154,24 +137,24 @@ export class PageViewService {
       take
         ? [
           startTime.toISOString(),
-            endTime.toISOString(),
-            page,
-            take,
-          ]
+          endTime.toISOString(),
+          page,
+          take,
+        ]
         : [startTime.toISOString(), endTime.toISOString(), page],
     );
 
-    logger.log({
-      level: "info",
-      message: "Fetching page view report",
-      event: "page_view_report_fetched",
-      page,
-      timestamp: new Date().toISOString(),
-    });
+    logger.info({ page, rows: result.rows.length }, "fetched page view report");
 
-    return result.rows.map((row) => ({
-      h: parseInt(row.hour),
-      v: parseInt(row.views),
-    }));
+
+    return {
+      page,
+      start: startTime.toISOString(),
+      end: endTime.toISOString(),
+      data: result.rows.map((row) => ({
+        hour: Number(row.hour),
+        views: Number(row.views),
+      })),
+    };
   }
 }

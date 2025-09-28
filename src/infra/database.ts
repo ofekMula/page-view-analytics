@@ -2,6 +2,8 @@ import { Pool } from 'pg';
 import dotenv from 'dotenv';
 dotenv.config();
 
+import { logger } from "../shared/utils/logger";
+
 export const pool = new Pool({
   user: process.env.POSTGRES_USER || 'postgres',
   password: process.env.POSTGRES_PASSWORD,
@@ -22,9 +24,13 @@ async function createTables() {
         PRIMARY KEY (page, view_hour, shard_key)
       );
     `);
-    console.log('Database tables created successfully');
+
+    logger.info({ table: 'page_views' }, 'database tables ensured');
   } catch (error) {
-    console.error('Error creating database tables:', error);
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'error creating database tables'
+    );
     throw error;
   }
 }
@@ -32,10 +38,17 @@ async function createTables() {
 export const connectDB = async () => {
   try {
     await pool.connect();
-    console.log('PostgreSQL connected successfully');
+    logger.info(
+      { host: process.env.POSTGRES_HOST, db: process.env.POSTGRES_DB },
+      'postgresql connected'
+    );
+
     await createTables();
   } catch (error) {
-    console.error('PostgreSQL connection error:', error);
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'postgresql connection error'
+    );
     process.exit(1);
   }
 };

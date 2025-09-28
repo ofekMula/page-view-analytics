@@ -1,6 +1,9 @@
 import { Channel, Message } from "amqplib/callback_api";
-import { pool } from "../config/database";
-import { RabbitMQClient } from "../config/rabbitmq";
+import { pool } from "../infra/database";
+import { RabbitMQClient } from "../infra/rabbitmq";
+import { logger } from '../shared/utils/logger';
+import { Aggregation } from "../types";
+
 interface PageViewMessage {
   page: string;
   timestamp: string;
@@ -40,15 +43,17 @@ export class AggregatorService {
       });
     });
 
-    console.log(
-      `Aggregator P${this.partition} started listening on queue: ${queueName}`,
+    logger.info(
+      { partition: this.partition, queue: queueName },
+      'aggregator started listening'
     );
+
 
     this.channel.consume(queueName, (msg) => {
       if (msg) {
         try {
           const message: PageViewMessage = JSON.parse(msg.content.toString());
-          this.messageBuffer.push({ ...message, raw: msg }); // store the original msg for ack/nack
+          this.messageBuffer.push({ ...message, raw: msg });
 
           if (this.messageBuffer.length >= this.batchSize) {
             this.flushBuffer();
@@ -59,7 +64,8 @@ export class AggregatorService {
             );
           }
         } catch (error) {
-          console.error(`Error parsing message:`, error);
+          logger.error({ err: error, msg: msg.content.toString() }, 'error parsing message');
+
           this.channel.nack(msg, false, true);
         }
       }
@@ -67,7 +73,6 @@ export class AggregatorService {
   }
 
   private validateTimestamp(timestamp: string): Date | null {
-    // Handle underscore format (convert to ISO-compatible format)
     const normalizedTimestamp = timestamp.replace("_", "T");
     const date = new Date(normalizedTimestamp);
     return isNaN(date.getTime()) ? null : date;
@@ -83,27 +88,23 @@ export class AggregatorService {
     }
 
     try {
-      await this.processBatch(batch);
-      batch.forEach((msg) => this.channel.ack(msg.raw)); // ack after successful processing
+      const rows = await this.processBatch(batch);
+      await this.storeAggregatedPageViews(rows);
+
+      batch.forEach((msg) => this.channel.ack(msg.raw));
     } catch (error) {
-      console.error("Batch processing failed:", error);
-      batch.forEach((msg) => this.channel.nack(msg.raw, false, true)); // requeue
+      logger.error({ err: error }, 'batch processing failed');
+      batch.forEach((msg) => this.channel.nack(msg.raw, false, true));
     }
   }
 
-  private async processBatch(batch: BufferedMessage[]): Promise<void> {
-    console.log("Started Processing new batch");
-
+  private async processBatch(batch: BufferedMessage[]): Promise<Aggregation[]> {
+    logger.info({ batchSize: batch.length }, 'started processing new batch');
     // Internal sharding: aggregate by (page, viewHour, partition, shard_key)
+
     const aggregates = new Map<
       string,
-      {
-        page: string;
-        viewHour: Date;
-        views: number;
-        partition: number;
-        shard_key: number;
-      }
+      Aggregation
     >();
 
     for (const msg of batch) {
@@ -131,35 +132,40 @@ export class AggregatorService {
       }
     }
 
-    // Prepare bulk values
-    const aggregations = Array.from(aggregates.values());
+    return Array.from(aggregates.values());
+  }
 
-    if (aggregations.length === 0) {
-      console.log("No valid rows to insert.");
+
+  private async storeAggregatedPageViews(rows: Aggregation[]): Promise<void> {
+    logger.info({ batchSize: rows.length }, 'storing aggregated page views');
+
+    if (rows.length === 0) {
+      logger.warn({ partition: this.partition }, 'no valid rows to insert');
       return;
     }
 
-    const values = aggregations.flatMap((agg) => [
-      agg.page,
-      agg.viewHour,
-      agg.views,
-      agg.partition,
-      agg.shard_key,
-    ]);
-
-    const placeholders = aggregations.map((_, i) => {
-      const base = i * 5;
-      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
+    const values = rows.flatMap(r => [r.page, r.viewHour, r.views, r.partition, r.shard_key]);
+    const placeholders = rows.map((_, i) => {
+      const b = i * 5;
+      return `($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5})`;
     });
 
     const query = `
       INSERT INTO page_views (page, view_hour, views, partition, shard_key)
-      VALUES ${placeholders.join(", ")}
+      VALUES ${placeholders.join(', ')}
       ON CONFLICT (page, view_hour, shard_key)
       DO UPDATE SET views = page_views.views + EXCLUDED.views
     `;
 
-    await pool.query(query, values);
-    console.log("Completed Processing new batch");
+    try {
+      await pool.query(query, values);
+      logger.info({ inserted: rows.length, partition: this.partition }, 'completed storing page views');
+    } catch (err) {
+      logger.error(
+        { err, partition: this.partition },
+        'failed to store aggregated page views'
+      );
+      throw err;
+    }
   }
 }

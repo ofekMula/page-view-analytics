@@ -1,5 +1,5 @@
 import * as amqp from 'amqplib/callback_api';
-import { promisify } from 'util';
+import { logger } from '../shared/utils/logger';
 
 export class RabbitMQClient {
   private connection: amqp.Connection | null = null;
@@ -8,6 +8,7 @@ export class RabbitMQClient {
   async connect(): Promise<void> {
     try {
       const url = process.env.RABBITMQ_URL || 'amqp://localhost:5672';
+
       this.connection = await new Promise<amqp.Connection>((resolve, reject) => {
         amqp.connect(url, (err, conn) => {
           if (err) reject(err);
@@ -22,9 +23,12 @@ export class RabbitMQClient {
         });
       });
 
-      console.log('RabbitMQ connected successfully');
+      logger.info({ url }, 'rabbitmq connected');
     } catch (error) {
-      console.error('RabbitMQ connection error:', error);
+      logger.error(
+        { error: error instanceof Error ? error.message : String(error) },
+        'rabbitmq connection error'
+      );
       process.exit(1);
     }
   }
@@ -54,8 +58,12 @@ export class RabbitMQClient {
           });
         });
       }
+      logger.info('rabbitmq connection closed');
     } catch (error) {
-      console.error('Error closing RabbitMQ connection:', error);
+      logger.error(
+        { error: error instanceof Error ? error.message : String(error) },
+        'error closing rabbitmq connection'
+      );
     }
   }
 }

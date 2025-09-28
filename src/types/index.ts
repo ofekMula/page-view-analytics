@@ -14,11 +14,24 @@ export const MultiPageViewSchema = Type.Record(
 )
 
 export const ReportResponseSchema = Type.Object({
-  data: Type.Array(Type.Object({
-    h: Type.Number(),
-    v: Type.Number()
-  }))
-})
+  page: Type.String(),
+  start: Type.String({ format: 'date-time' }),
+  end: Type.String({ format: 'date-time' }),
+  data: Type.Array(
+    Type.Object({
+      hour: Type.Number(),
+      views: Type.Number(),
+    })
+  ),
+});
+
+export type Aggregation = {
+  page: string;
+  viewHour: Date;
+  views: number;
+  partition: number;
+  shard_key: number;
+};
 
 export type SinglePageView = typeof SinglePageViewSchema.static
 export type MultiPageView = typeof MultiPageViewSchema.static
