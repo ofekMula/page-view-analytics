@@ -1,23 +1,20 @@
 # Page Views Analytics Service
 
-A scalable analytics service that tracks and aggregates page views using Node.js, RabbitMQ, and PostgreSQL.
+Page Views Analytics Service
+
+A scalable system for tracking and aggregating page views, built with Node.js, RabbitMQ, and PostgreSQL.
 
 ## Architecture
 
-The service consists of:
+**API Server** - Receives page view events and serves reporting queries.
 
-- A REST API server for receiving and querying page views
+**Workers** - Aggregate and persist events into PostgreSQL.
 
-- Worker processes for aggregating data
+**RabbitMQ** - Provides durable, partitioned message queues for parallel processing.
 
-- RabbitMQ for message queuing
+**PostgreSQL** - Stores aggregated page view data.
 
-- PostgreSQL for data storage
-
-The system uses a partitioned architecture where page views are distributed across workers based on the page URL, enabling parallel processing and improved scalability.
-
-The workers are responsible for aggregating page view requests, ensuring that write-heavy operations are handled efficiently.
-To further reduce write conflicts and increase throughput, the service implements row-level sharding using a random shard key. It's minimizing contention and optimizing performance under high load.
+Page views are partitioned by URL to balance load across workers, while row-level sharding with random shard keys reduces write contention and improves throughput under heavy load.
 
 ![System Architecture Details](docs/SystemArchitecture.png)
 
