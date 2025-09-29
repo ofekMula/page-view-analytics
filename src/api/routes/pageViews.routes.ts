@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { SinglePageViewSchema, MultiPageViewSchema, ReportResponseSchema } from '../../types';
 import type { PageViewService } from '../../services/pageViewService';
-import { logger } from '../../shared/utils/logger';
 
 type Deps = { pageViewService: PageViewService };
 
