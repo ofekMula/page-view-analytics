@@ -9,7 +9,7 @@ export function registerPageViewRoutes(app: FastifyInstance, { pageViewService }
     app.post('/page-views/single', {
         schema: { body: SinglePageViewSchema }
     }, async (request) => {
-        // @ts-ignore – optional if you don’t have a Body type here
+        // @ts-ignore
         await pageViewService.incrementSingleView(request.body.page, request.body.timestamp);
         return { success: true };
     });
